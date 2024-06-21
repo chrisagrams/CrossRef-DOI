@@ -12,6 +12,8 @@ def get_reference_count_and_indexed_time(doi, timeout=3, retries=3):
     for attempt in range(retries):
         try:
             response = works.doi(doi)
+            if response is None:
+                raise requests.exceptions.ConnectionError
             count = response['is-referenced-by-count']
             indexed_time = response['indexed']['date-time']
             time.sleep(timeout)
