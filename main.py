@@ -4,15 +4,25 @@ import time
 from crossref.restful import Works
 import sqlite3
 from tqdm import tqdm
+import requests
 
 
-def get_reference_count_and_indexed_time(doi, timeout=3):
+def get_reference_count_and_indexed_time(doi, timeout=3, retries=3):
     works = Works()
-    response = works.doi(doi)
-    count = response['is-referenced-by-count']
-    indexed_time = response['indexed']['date-time']
-    time.sleep(timeout)
-    return count, indexed_time
+    for attempt in range(retries):
+        try:
+            response = works.doi(doi)
+            count = response['is-referenced-by-count']
+            indexed_time = response['indexed']['date-time']
+            time.sleep(timeout)
+            return count, indexed_time
+        except requests.exceptions.ConnectTimeout as e:
+            if attempt < retries - 1:
+                print(f"Retry {attempt + 1}/{retries} for DOI {doi} due to timeout.")
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                print(f"Failed to get data for DOI {doi} after {retries} retries.")
+                return None, None
 
 
 def load_existing_data(filename):
@@ -27,7 +37,6 @@ def load_existing_data(filename):
     except FileNotFoundError:
         pass
     return data
-
 
 if __name__ == '__main__':
     conn = sqlite3.connect('PRIDE-metadata.db')
@@ -51,7 +60,8 @@ if __name__ == '__main__':
                     doi = reference['doi']
                     if (accession, doi) not in existing_data:
                         count, indexed_time = get_reference_count_and_indexed_time(doi)
-                        csv_writer.writerow([accession, doi, count, indexed_time])
+                        if count is not None and indexed_time is not None:
+                            csv_writer.writerow([accession, doi, count, indexed_time])
                     else:
                         print(f"Skipping {doi} for {accession} as it already exists in the CSV.")
 
