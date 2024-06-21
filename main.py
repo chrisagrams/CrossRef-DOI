@@ -4,17 +4,25 @@ import time
 from crossref.restful import Works
 import sqlite3
 from tqdm import tqdm
+import requests
 
 
-def get_reference_count_and_indexed_time(doi, timeout=3):
+def get_reference_count_and_indexed_time(doi, timeout=3, retries=3):
     works = Works()
-    response = works.doi(doi)
-    if response is None:
-        return None, None
-    count = response.get('is-referenced-by-count', None)
-    indexed_time = response.get('indexed', {}).get('date-time', None)
-    time.sleep(timeout)
-    return count, indexed_time
+    for attempt in range(retries):
+        try:
+            response = works.doi(doi)
+            count = response['is-referenced-by-count']
+            indexed_time = response['indexed']['date-time']
+            time.sleep(timeout)
+            return count, indexed_time
+        except requests.exceptions.ConnectTimeout as e:
+            if attempt < retries - 1:
+                print(f"Retry {attempt + 1}/{retries} for DOI {doi} due to timeout.")
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                print(f"Failed to get data for DOI {doi} after {retries} retries.")
+                return None, None
 
 
 def load_existing_data(filename):
