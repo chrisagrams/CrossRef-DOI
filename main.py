@@ -18,7 +18,7 @@ def get_reference_count_and_indexed_time(doi, timeout=3, retries=3):
             indexed_time = response['indexed']['date-time']
             time.sleep(timeout)
             return count, indexed_time
-        except requests.exceptions.ConnectTimeout as e:
+        except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as e:
             if attempt < retries - 1:
                 print(f"Retry {attempt + 1}/{retries} for DOI {doi} due to timeout.")
                 time.sleep(2 ** attempt)  # Exponential backoff
